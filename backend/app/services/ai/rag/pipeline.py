@@ -22,26 +22,32 @@ CHAT_PROMPT = ChatPromptTemplate.from_messages(
 
 def _format_context(documents) -> str:
     if not documents:
-        return 'No relevant context was retrieved.'
+        return "No relevant context was retrieved."
 
-    sections: list[str] = []
+    sections = []
+
     for index, document in enumerate(documents, start=1):
-        source = document.metadata.get('source', 'unknown')
-        title = document.metadata.get('title', source)
-        sections.append(f'[{index}] Source: {source} | Title: {title}\n{document.page_content}')
-    return '\n\n'.join(sections)
+        source = document.metadata.get("source_file", "unknown")
+        title = document.metadata.get("Header_1", "")
+        subtitle = document.metadata.get("Header_2", "")
 
+        sections.append(
+            f"[{index}] {title}\n{subtitle}\nSource: {source}\n\n{document.page_content}"
+        )
 
-def _unique_sources(documents) -> list[str]:
-    seen: set[str] = set()
-    sources: list[str] = []
+    return "\n\n".join(sections)
+
+def _unique_sources(documents):
+    seen = set()
+    sources = []
+
     for document in documents:
-        source = document.metadata.get('source', 'unknown')
+        source = document.metadata.get("source_file", "unknown")
         if source not in seen:
             seen.add(source)
             sources.append(source)
-    return sources
 
+    return sources
 
 def _to_ollama_messages(prompt_messages) -> list[dict[str, str]]:
     role_map = {'system': 'system', 'human': 'user', 'ai': 'assistant'}
@@ -54,6 +60,16 @@ def _to_ollama_messages(prompt_messages) -> list[dict[str, str]]:
 
 def build_rag_answer(question: str) -> dict:
     documents = retrieve_documents(question)
+
+    print("\n========== RETRIEVED ==========")
+    print("Question:", question)
+    print("Docs:", len(documents))
+
+    for d in documents:
+        print(d.metadata)
+        print(d.page_content[:200])
+        print("------------------------")
+
     sources = _unique_sources(documents)
 
     if not documents:
@@ -62,7 +78,11 @@ def build_rag_answer(question: str) -> dict:
             'sources': [],
         }
 
-    prompt_messages = CHAT_PROMPT.format_messages(question=question, context=_format_context(documents))
+    prompt_messages = CHAT_PROMPT.format_messages(
+        question=question,
+        context=_format_context(documents),
+    )
+
     answer = get_chat_response(_to_ollama_messages(prompt_messages))
 
     return {
